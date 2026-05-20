@@ -1,9 +1,12 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
+import { appParams } from "@/lib/app-params";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
 import { Bookmark } from "lucide-react";
 import SavedPlansList from "../components/saved/SavedPlansList";
+
+const BASE44_ENABLED = !!appParams.appId;
 
 export default function Saved() {
   const { toast } = useToast();
@@ -12,6 +15,7 @@ export default function Saved() {
   const { data: savedPlans = [], isLoading } = useQuery({
     queryKey: ["savedPlans"],
     queryFn: () => base44.entities.SavedPlan.list("-created_date"),
+    enabled: BASE44_ENABLED,
   });
 
   const handleDelete = async (id) => {

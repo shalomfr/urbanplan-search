@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { appParams } from "@/lib/app-params";
 import { fetchAllPlanningInfo } from "@/api/jerusalemGis";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
+
+const BASE44_ENABLED = !!appParams.appId;
 import SearchHero from "../components/search/SearchHero";
 import SearchForm from "../components/search/SearchForm";
 import SearchResults from "../components/search/SearchResults";
@@ -20,11 +23,13 @@ export default function Search() {
   const { data: savedPlans = [] } = useQuery({
     queryKey: ["savedPlans"],
     queryFn: () => base44.entities.SavedPlan.list("-created_date"),
+    enabled: BASE44_ENABLED,
   });
 
   const { data: searchHistory = [] } = useQuery({
     queryKey: ["searchHistory"],
     queryFn: () => base44.entities.SearchHistory.list("-created_date", 10),
+    enabled: BASE44_ENABLED,
   });
 
   const savedPlanIds = new Set(savedPlans.map((p) => p.plan_number));
@@ -41,12 +46,16 @@ export default function Search() {
       try {
         const data = await fetchAllPlanningInfo(query);
         setGisResults({ data, query });
-        await base44.entities.SearchHistory.create({
-          query: label,
-          search_type: "jerusalem_direct",
-          results_count: data.categories.reduce((s, c) => s + (c.records?.length || 0), 0),
-        });
-        queryClient.invalidateQueries({ queryKey: ["searchHistory"] });
+        if (BASE44_ENABLED) {
+          try {
+            await base44.entities.SearchHistory.create({
+              query: label,
+              search_type: "jerusalem_direct",
+              results_count: data.categories.reduce((s, c) => s + (c.records?.length || 0), 0),
+            });
+            queryClient.invalidateQueries({ queryKey: ["searchHistory"] });
+          } catch { /* history is optional */ }
+        }
       } catch (err) {
         toast({
           title: "שגיאה בשליפה ממערכת ירושלים",
@@ -102,6 +111,17 @@ export default function Search() {
       },
     };
 
+    if (!BASE44_ENABLED) {
+      toast({
+        title: "חיפוש חופשי לא זמין",
+        description: "במצב עצמאי זמין רק חיפוש לפי גוש/חלקה/כתובת בירושלים.",
+        variant: "destructive",
+      });
+      setResults([]);
+      setIsSearching(false);
+      return;
+    }
+
     try {
       const res = await base44.integrations.Core.InvokeLLM({
         prompt,
@@ -113,13 +133,14 @@ export default function Search() {
       const plans = res?.plans || [];
       setResults(plans);
 
-      // Save search to history
-      await base44.entities.SearchHistory.create({
-        query,
-        search_type: searchType,
-        results_count: plans.length,
-      });
-      queryClient.invalidateQueries({ queryKey: ["searchHistory"] });
+      try {
+        await base44.entities.SearchHistory.create({
+          query,
+          search_type: searchType,
+          results_count: plans.length,
+        });
+        queryClient.invalidateQueries({ queryKey: ["searchHistory"] });
+      } catch { /* history is optional */ }
     } catch (err) {
       toast({
         title: "שגיאה בחיפוש",
@@ -133,6 +154,14 @@ export default function Search() {
   };
 
   const handleSavePlan = async (plan) => {
+    if (!BASE44_ENABLED) {
+      toast({
+        title: "שמירה לא זמינה",
+        description: "במצב עצמאי לא ניתן לשמור תוכניות.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (savedPlanIds.has(plan.plan_number)) {
       const existing = savedPlans.find((p) => p.plan_number === plan.plan_number);
       if (existing) {

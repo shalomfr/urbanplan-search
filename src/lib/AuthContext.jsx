@@ -15,6 +15,14 @@ export const AuthProvider = ({ children }) => {
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
 
   useEffect(() => {
+    // Standalone mode: no base44 app configured -> skip auth entirely.
+    if (!appParams.appId) {
+      setIsLoadingAuth(false);
+      setIsLoadingPublicSettings(false);
+      setIsAuthenticated(false);
+      setAuthChecked(true);
+      return;
+    }
     checkAppState();
   }, []);
 

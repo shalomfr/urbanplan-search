@@ -1,10 +1,13 @@
 import React from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { Search, Bookmark } from "lucide-react";
+import { appParams } from "@/lib/app-params";
+
+const BASE44_ENABLED = !!appParams.appId;
 
 const NAV_ITEMS = [
   { path: "/", label: "חיפוש", icon: Search },
-  { path: "/saved", label: "שמורים", icon: Bookmark },
+  ...(BASE44_ENABLED ? [{ path: "/saved", label: "שמורים", icon: Bookmark }] : []),
 ];
 
 function Navigation() {
