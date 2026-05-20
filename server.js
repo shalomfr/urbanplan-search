@@ -15,6 +15,34 @@ const BASE44_TARGET =
   process.env.BASE44_PROXY_TARGET ||
   "https://preview-sandbox--6a0d20f18fd94e616eb3512d.base44.app";
 
+// Akamai is picky — emulate a real browser request from the Jerusalem GIS UI.
+function applyBrowserHeaders(proxyReq) {
+  proxyReq.setHeader("User-Agent", BROWSER_UA);
+  proxyReq.setHeader("Accept", "application/json, text/plain, */*");
+  proxyReq.setHeader("Accept-Language", "he-IL,he;q=0.9,en;q=0.8");
+  proxyReq.setHeader(
+    "Referer",
+    "https://jergisinfohub.jerusalem.muni.il/UI/GisMeidaT/index.html"
+  );
+  proxyReq.setHeader(
+    "sec-ch-ua",
+    '"Chromium";v="148", "Not)A;Brand";v="8", "Google Chrome";v="148"'
+  );
+  proxyReq.setHeader("sec-ch-ua-platform", '"Windows"');
+  proxyReq.setHeader("sec-ch-ua-mobile", "?0");
+  proxyReq.setHeader("sec-fetch-site", "same-origin");
+  proxyReq.setHeader("sec-fetch-mode", "cors");
+  proxyReq.setHeader("sec-fetch-dest", "empty");
+  // Drop headers that mark this as a proxied request
+  proxyReq.removeHeader("x-forwarded-for");
+  proxyReq.removeHeader("x-forwarded-proto");
+  proxyReq.removeHeader("x-forwarded-host");
+  proxyReq.removeHeader("x-real-ip");
+  proxyReq.removeHeader("via");
+  proxyReq.removeHeader("forwarded");
+  proxyReq.removeHeader("render-proxy-ttl");
+}
+
 app.use(
   "/jergis",
   createProxyMiddleware({
@@ -22,9 +50,7 @@ app.use(
     changeOrigin: true,
     secure: false,
     on: {
-      proxyReq(proxyReq) {
-        proxyReq.setHeader("User-Agent", BROWSER_UA);
-      },
+      proxyReq: applyBrowserHeaders,
     },
   })
 );
@@ -36,9 +62,7 @@ app.use(
     changeOrigin: true,
     secure: false,
     on: {
-      proxyReq(proxyReq) {
-        proxyReq.setHeader("User-Agent", BROWSER_UA);
-      },
+      proxyReq: applyBrowserHeaders,
     },
   })
 );
