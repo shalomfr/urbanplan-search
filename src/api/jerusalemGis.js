@@ -189,9 +189,33 @@ export function getRecordDocumentKey(categoryId, record) {
   return { sysId: String(sysId), tikNum: String(tikNum) };
 }
 
-// One-shot: given gush/helka, fetch all available categories with their records.
+// One-shot: given a location (gush+helka OR x+y), fetch all available categories
+// with their records. In production this is a single Worker call that aggregates
+// the ~33 underlying API requests at the edge — much faster than doing them
+// from the browser. In dev we still hit the Vite /jergis proxy individually.
 export async function fetchAllPlanningInfo({ gush, helka, ...rest }) {
   const params = { gush, helka, ...rest };
+
+  if (!import.meta.env.DEV) {
+    // Production path: one round-trip to the aggregating Worker endpoint.
+    try {
+      const aggregated = await jergisFetch(`/all?${buildQuery(params)}`);
+      if (aggregated?.categories) {
+        const categories = [...aggregated.categories].map((c) => ({
+          ...c,
+          name: c.name ?? CATEGORY_META[c.id]?.name,
+          label: c.label ?? CATEGORY_META[c.id]?.label,
+        }));
+        categories.sort((a, b) => (CATEGORY_META[a.id]?.priority ?? 99) - (CATEGORY_META[b.id]?.priority ?? 99));
+        return {
+          query: { gush, helka, ...rest },
+          generalInfo: aggregated.generalInfo,
+          uiUrl: buildJergisUiUrl(params),
+          categories,
+        };
+      }
+    } catch { /* fall through to per-call fetch */ }
+  }
 
   const [generalInfo, availableIds] = await Promise.all([
     getGeneralInfo(params).catch(() => null),
@@ -207,7 +231,7 @@ export async function fetchAllPlanningInfo({ gush, helka, ...rest }) {
   categories.sort((a, b) => (CATEGORY_META[a.id]?.priority ?? 99) - (CATEGORY_META[b.id]?.priority ?? 99));
 
   return {
-    query: { gush, helka },
+    query: { gush, helka, ...rest },
     generalInfo,
     uiUrl: buildJergisUiUrl(params),
     categories,
