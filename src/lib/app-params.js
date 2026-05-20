@@ -2,6 +2,12 @@ const isNode = typeof window === 'undefined';
 const windowObj = isNode ? { localStorage: new Map() } : window;
 const storage = windowObj.localStorage;
 
+// If the build wasn't configured with a base44 app id, ignore any stale
+// storage from previous visits. This lets the same site serve as a
+// standalone GIS tool after removing the base44 env vars.
+const STANDALONE_BUILD =
+	!isNode && !import.meta.env.VITE_BASE44_APP_ID;
+
 const toSnakeCase = (str) => {
 	return str.replace(/([A-Z])/g, '_$1').toLowerCase();
 }
@@ -27,6 +33,7 @@ const getAppParamValue = (paramName, { defaultValue = undefined, removeFromUrl =
 		storage.setItem(storageKey, defaultValue);
 		return defaultValue;
 	}
+	if (STANDALONE_BUILD) return null;
 	const storedValue = storage.getItem(storageKey);
 	if (storedValue) {
 		return storedValue;
