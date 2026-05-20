@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { appParams } from "@/lib/app-params";
 import { fetchAllPlanningInfo } from "@/api/jerusalemGis";
+import { resolveTextToGushHelka } from "@/api/geocode";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -70,6 +71,32 @@ export default function Search() {
     }
 
     setSearchQuery(query);
+
+    // Try to resolve "address" / "free_text" / "gush_helka" queries to gush+helka
+    // via GovMap before falling back to LLM. Works without base44 entirely.
+    if (searchType !== "plan_number") {
+      try {
+        const resolved = await resolveTextToGushHelka(query);
+        if (resolved) {
+          const label = `${query} (גוש ${resolved.gush} / חלקה ${resolved.helka})`;
+          setSearchQuery(label);
+          const data = await fetchAllPlanningInfo(resolved);
+          setGisResults({ data, query: resolved });
+          if (BASE44_ENABLED) {
+            try {
+              await base44.entities.SearchHistory.create({
+                query: label,
+                search_type: searchType,
+                results_count: data.categories.reduce((s, c) => s + (c.records?.length || 0), 0),
+              });
+              queryClient.invalidateQueries({ queryKey: ["searchHistory"] });
+            } catch { /* history is optional */ }
+          }
+          setIsSearching(false);
+          return;
+        }
+      } catch { /* fall through to LLM */ }
+    }
 
     const prompt = `אתה מומחה לתכנון ובנייה בישראל. המשתמש מחפש תוכניות בניין עיר (תב"ע) לפי השאילתה: "${query}"
 

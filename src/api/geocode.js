@@ -70,6 +70,21 @@ const TYPE_RANK = { parcel: 0, address: 1, street: 2, settlement: 3, neighborhoo
  * @param {AbortSignal} [signal]
  * @returns {Promise<Array<{id, type, text, displayText, isJerusalem, point, gushHelka, raw}>>}
  */
+/**
+ * Resolve free-form text to {gush, helka} without any LLM:
+ *   1. Match "גוש X חלקה Y" directly via regex.
+ *   2. Otherwise query GovMap autocomplete and return the first parcel result.
+ * Returns null if nothing matches.
+ */
+export async function resolveTextToGushHelka(text) {
+  const direct = extractGushHelkaFromText(text);
+  if (direct) return direct;
+
+  const results = await geocodeAutocomplete(text).catch(() => []);
+  const firstParcel = results.find((r) => r.gushHelka);
+  return firstParcel?.gushHelka || null;
+}
+
 export async function geocodeAutocomplete(searchText, signal) {
   const q = (searchText || '').trim();
   if (q.length < 2) return [];
