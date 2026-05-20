@@ -1,9 +1,11 @@
 // Jerusalem Municipality GIS client.
 // Documentation: src/api/jerusalemGis.api.md
 
-const JERGIS_BASE = import.meta.env.DEV
-  ? '/jergis'
-  : 'https://jergisinfohub.jerusalem.muni.il/Services/api';
+// Always go through the host's /jergis path. In dev Vite proxies it; in
+// production the deploy target (e.g. Render) must rewrite /jergis/* ->
+// https://jergisinfohub.jerusalem.muni.il/Services/api/:splat. Direct calls
+// to jergisinfohub.jerusalem.muni.il fail CORS in the browser.
+const JERGIS_BASE = '/jergis';
 
 const JERGIS_UI_BASE = 'https://jergisinfohub.jerusalem.muni.il/UI/GisMeidaT/index.html';
 const YKPUB_BASE = 'https://ykpubdata.jerusalem.muni.il/#/Rishui';
