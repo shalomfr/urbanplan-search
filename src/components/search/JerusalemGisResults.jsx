@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Accordion,
@@ -17,12 +17,70 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ExternalLink, FileText, MapPin, AlertCircle, Building2 } from "lucide-react";
-import { buildRecordLinks } from "@/api/jerusalemGis";
+import { ExternalLink, FileText, MapPin, AlertCircle, Building2, Download, Loader2 } from "lucide-react";
+import { buildRecordLinks, getPlanDocuments, getRecordDocumentKey } from "@/api/jerusalemGis";
 
 function formatCellValue(value) {
   if (value === null || value === undefined || value === "") return "—";
   return String(value);
+}
+
+function RecordDocuments({ categoryId, record }) {
+  const docKey = getRecordDocumentKey(categoryId, record);
+  const [state, setState] = useState({ status: "idle", docs: [], error: null });
+
+  if (!docKey) return null;
+
+  const loadDocs = async () => {
+    setState({ status: "loading", docs: [], error: null });
+    try {
+      const docs = await getPlanDocuments(docKey.sysId, docKey.tikNum);
+      setState({ status: "loaded", docs, error: null });
+    } catch (err) {
+      setState({ status: "error", docs: [], error: err.message || "שגיאה" });
+    }
+  };
+
+  if (state.status === "idle") {
+    return (
+      <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={loadDocs}>
+        <FileText className="w-3 h-3" />
+        מסמכים
+      </Button>
+    );
+  }
+  if (state.status === "loading") {
+    return (
+      <Button variant="outline" size="sm" className="h-7 text-xs gap-1" disabled>
+        <Loader2 className="w-3 h-3 animate-spin" />
+        טוען...
+      </Button>
+    );
+  }
+  if (state.status === "error") {
+    return <span className="text-xs text-destructive">שגיאה: {state.error}</span>;
+  }
+  if (state.docs.length === 0) {
+    return <span className="text-xs text-muted-foreground">אין מסמכים</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1 max-w-[400px]">
+      {state.docs.map((doc, i) => (
+        <a
+          key={i}
+          href={doc.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 h-7 px-2 text-xs border rounded-md hover:bg-accent transition"
+          title={doc.description}
+        >
+          <Download className="w-3 h-3" />
+          {doc.description}
+        </a>
+      ))}
+    </div>
+  );
 }
 
 function CategoryTable({ category }) {
@@ -52,7 +110,9 @@ function CategoryTable({ category }) {
         </TableHeader>
         <TableBody>
           {records.map((rec, idx) => {
-            const links = buildRecordLinks(category.subTopics, rec);
+            const links = buildRecordLinks(category.subTopics, rec).filter(
+              (l) => l.kind !== "ArchivInfo"
+            );
             return (
               <TableRow key={idx}>
                 {visibleFields.map((f) => (
@@ -62,6 +122,7 @@ function CategoryTable({ category }) {
                 ))}
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
+                    <RecordDocuments categoryId={category.id} record={rec} />
                     {links.map((link) => (
                       <Button
                         key={link.id}

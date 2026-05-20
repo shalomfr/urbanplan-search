@@ -22,7 +22,7 @@ export default defineConfig({
       '/jergis': {
         target: 'https://jergisinfohub.jerusalem.muni.il',
         changeOrigin: true,
-        secure: true,
+        secure: false,
         rewrite: (path) => path.replace(/^\/jergis/, '/Services/api'),
       },
     },

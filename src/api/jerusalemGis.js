@@ -7,6 +7,19 @@ const JERGIS_BASE = import.meta.env.DEV
 
 const JERGIS_UI_BASE = 'https://jergisinfohub.jerusalem.muni.il/UI/GisMeidaT/index.html';
 const YKPUB_BASE = 'https://ykpubdata.jerusalem.muni.il/#/Rishui';
+const JERBASIC_API = 'https://jerbasicserviceapi.jerusalem.muni.il/api/Db/ExecuteGetJSON';
+
+// SystemCode per category — used when calling jerbasicserviceapi document APIs.
+// Categories not listed (13, 40, 47, 50) don't have per-record documents.
+export const CATEGORY_SYSTEM_CODE = {
+  12: '26400001', // תב"ע
+  16: '26400023', // תצ"ר
+  14: '26400024', // מידע להיתר
+  1:  '26400046', // רישוי בנייה
+  6:  '26400056', // פיקוח / עבירות בנייה
+  84: '26400086', // חוות דעת שימור
+  23: '26400230', // אתרים לשימור
+};
 
 export const CATEGORY_META = {
   12: { name: 'YeudayKarka',         label: 'תב"ע (החלות על המגרש)',     priority: 1 },
@@ -105,6 +118,69 @@ export function buildRecordLinks(subTopics, record) {
       sortOrder: st.SortOrder ?? 99,
     };
   }).sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+// ---- Document API (jerbasicserviceapi.jerusalem.muni.il) ----
+// POST endpoint that returns direct PDF URLs (urlDoc) for plans, processes, and committee decisions.
+// Casing of parameter keys is inconsistent across stored procs — copy from the table verbatim.
+
+async function callProc(procName, parameters) {
+  const res = await fetch(JERBASIC_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ProcName: procName, Cnn: 'cnnGisYk', Parameters: parameters }),
+  });
+  if (!res.ok) throw new Error(`jerbasicserviceapi ProcName=${procName} failed: ${res.status}`);
+  return res.json();
+}
+
+const DOC_DESC_PRIORITY = { 'תקנון': 1, 'תשריט': 2, 'נספח': 3 };
+
+export async function getPlanDocuments(sysId, tikNum) {
+  const list = await callProc(242700452, { sysId: String(sysId), tikNum: String(tikNum) });
+  return (list || []).map((d) => ({
+    tikNum: d.tikNum,
+    description: d.documentDescr,
+    url: d.urlDoc,
+    extension: d.docExtension || null,
+    date: d.documentFullDate || d.documentDate || d.dateIn || null,
+  })).sort((a, b) => (DOC_DESC_PRIORITY[a.description] ?? 99) - (DOC_DESC_PRIORITY[b.description] ?? 99));
+}
+
+export async function getProcessInfo(systemId, tikNum) {
+  const params = { SystemID: String(systemId), TikNum: String(tikNum) };
+  const [stages, details] = await Promise.all([
+    callProc(242700448, params).catch(() => []),
+    callProc(242700451, params).catch(() => []),
+  ]);
+  return { stages: stages || [], details: details || [] };
+}
+
+export async function getCommitteeDecisions(systemId, tikNum) {
+  return callProc(242700453, { systemID: String(systemId), tikNum: String(tikNum) });
+}
+
+// Map category -> record field name holding the tikNum identifier.
+const CATEGORY_TIKNUM_FIELD = {
+  1:  'tik_num',     // רישוי בנייה
+  6:  'tik_num',     // פיקוח
+  12: 'mezahe',      // תב"ע
+  14: 'tik_num',     // מידע להיתר
+  16: 'tazar_num',   // תצ"ר
+  23: 'tikNum',      // אתרים לשימור
+  84: 'tik_num',     // חוות דעת שימור
+};
+
+// Resolve a record (any category) to the right sysId + tikNum for the document API.
+// Returns null if this category doesn't have documents (e.g. plot/zoning categories).
+export function getRecordDocumentKey(categoryId, record) {
+  // Prefer the systemCode embedded in the record (categories 1, 6 expose it).
+  const sysId = record?.systemCode ?? CATEGORY_SYSTEM_CODE[categoryId];
+  if (!sysId) return null;
+  const field = CATEGORY_TIKNUM_FIELD[categoryId];
+  const tikNum = field ? record?.[field] : null;
+  if (!tikNum) return null;
+  return { sysId: String(sysId), tikNum: String(tikNum) };
 }
 
 // One-shot: given gush/helka, fetch all available categories with their records.
