@@ -2,7 +2,22 @@
 // Endpoint discovered via reverse-engineering: POST /api/search-service/autocomplete
 // CORS verified: works cross-origin from arbitrary browsers.
 
+import proj4 from 'proj4';
+
 const GOVMAP_AUTOCOMPLETE = 'https://www.govmap.gov.il/api/search-service/autocomplete';
+
+// EPSG:2039 — Israeli Transverse Mercator (the system Jerusalem GIS uses).
+proj4.defs(
+  'EPSG:2039',
+  '+proj=tmerc +lat_0=31.7343936111111 +lon_0=35.2045169444444 +k=1.00006700000 +x_0=219529.584 +y_0=626907.39 +ellps=GRS80 +towgs84=-48,55,52,0,0,0,0 +units=m +no_defs'
+);
+
+// Convert a Web Mercator (EPSG:3857) point — what GovMap returns — to ITM (EPSG:2039),
+// which Jerusalem's GIS accepts via x/y query parameters.
+export function webMercatorToItm({ x, y }) {
+  const [itmX, itmY] = proj4('EPSG:3857', 'EPSG:2039', [x, y]);
+  return { x: Math.round(itmX), y: Math.round(itmY) };
+}
 
 // "גוש 30061 חלקה 4"  or  "גוש 30061ב חלקה 4"  -> { gush, helka }
 const PARCEL_TEXT_RE = /גוש\s+([\dא-ת]+)\s+חלקה\s+(\d+)/;
@@ -71,10 +86,12 @@ const TYPE_RANK = { parcel: 0, address: 1, street: 2, settlement: 3, neighborhoo
  * @returns {Promise<Array<{id, type, text, displayText, isJerusalem, point, gushHelka, raw}>>}
  */
 /**
- * Resolve free-form text to {gush, helka} without any LLM:
- *   1. Match "גוש X חלקה Y" directly via regex.
- *   2. Otherwise query GovMap autocomplete and return the first parcel result.
- * Returns null if nothing matches.
+ * Resolve free-form text to query params Jerusalem GIS understands.
+ * Tries, in order:
+ *   1. Regex "גוש X חלקה Y" -> { gush, helka }
+ *   2. GovMap autocomplete: first parcel result -> { gush, helka }
+ *   3. GovMap autocomplete: first address/point result -> { x, y } in ITM (EPSG:2039)
+ * Returns null if nothing matches at all.
  */
 export async function resolveTextToGushHelka(text) {
   const direct = extractGushHelkaFromText(text);
@@ -82,7 +99,15 @@ export async function resolveTextToGushHelka(text) {
 
   const results = await geocodeAutocomplete(text).catch(() => []);
   const firstParcel = results.find((r) => r.gushHelka);
-  return firstParcel?.gushHelka || null;
+  if (firstParcel) return firstParcel.gushHelka;
+
+  const firstWithPoint = results.find((r) => r.point);
+  if (firstWithPoint) {
+    const itm = webMercatorToItm(firstWithPoint.point);
+    return { x: itm.x, y: itm.y, _label: firstWithPoint.displayText || firstWithPoint.text };
+  }
+
+  return null;
 }
 
 export async function geocodeAutocomplete(searchText, signal) {

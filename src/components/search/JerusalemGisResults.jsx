@@ -165,7 +165,9 @@ export default function JerusalemGisResults({ data, query }) {
         <AlertCircle className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-foreground mb-2">לא נמצא מידע</h3>
         <p className="text-muted-foreground mb-6">
-          לא נמצאו נתונים תכנוניים עבור גוש {query.gush} חלקה {query.helka}
+          {query.gush
+            ? `לא נמצאו נתונים תכנוניים עבור גוש ${query.gush} חלקה ${query.helka}`
+            : `לא נמצאו נתונים תכנוניים עבור ${query._label || `נ.צ. ${query.x}, ${query.y}`}`}
         </p>
         <Button
           variant="outline"
@@ -189,7 +191,9 @@ export default function JerusalemGisResults({ data, query }) {
               <div className="flex items-center gap-2 mb-2">
                 <MapPin className="w-5 h-5 text-primary" />
                 <h2 className="text-lg font-bold text-foreground">
-                  ירושלים — גוש {query.gush} / חלקה {query.helka}
+                  {query.gush
+                    ? `ירושלים — גוש ${query.gush} / חלקה ${query.helka}`
+                    : query._label || `ירושלים — נ.צ. ${query.x}, ${query.y}`}
                 </h2>
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">

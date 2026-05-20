@@ -78,7 +78,9 @@ export default function Search() {
       try {
         const resolved = await resolveTextToGushHelka(query);
         if (resolved) {
-          const label = `${query} (גוש ${resolved.gush} / חלקה ${resolved.helka})`;
+          const label = resolved.gush
+            ? `${query} (גוש ${resolved.gush} / חלקה ${resolved.helka})`
+            : resolved._label || query;
           setSearchQuery(label);
           const data = await fetchAllPlanningInfo(resolved);
           setGisResults({ data, query: resolved });
