@@ -122,6 +122,91 @@ async function aggregate(url) {
   });
 }
 
+// Resolve free-form text -> {gush, helka} by chaining two GovMap endpoints.
+// First try autocomplete: if it returns a parcel result, parse it.
+// Otherwise take the first result's POINT(x y) and call entitiesByPoint
+// with the parcel_all layer, which returns actual gush/helka covering that point.
+async function resolveToParcel(q) {
+  if (!q) return { error: "missing q", status: 400 };
+
+  // Direct "גוש X חלקה Y" regex.
+  const direct = q.match(/גוש\s+([\dא-ת]+)\s+חלקה\s+(\d+)/);
+  if (direct) {
+    return { gush: direct[1], helka: direct[2], from: "regex" };
+  }
+
+  // Autocomplete
+  const acRes = await fetch(
+    "https://www.govmap.gov.il/api/search-service/autocomplete",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ searchText: q, language: "he" }),
+    }
+  );
+  if (!acRes.ok) return { error: "autocomplete failed", status: 502 };
+  const ac = await acRes.json();
+  const results = ac?.results || [];
+
+  // Parcel result directly?
+  const parcel = results.find((r) => r.type === "parcel");
+  if (parcel) {
+    const m = parcel.text.match(/גוש\s+([\dא-ת]+\/?\d*)\s+חלקה\s+(\d+)/);
+    if (m) {
+      return { gush: m[1], helka: m[2], from: "autocomplete-parcel", label: parcel.text };
+    }
+  }
+
+  // Reverse-geocode the top result's point.
+  const top = results.find((r) => r.shape && r.shape.startsWith("POINT"));
+  if (!top) return { error: "no resolvable result", status: 404 };
+  const pm = top.shape.match(/POINT\(([-\d.]+)\s+([-\d.]+)\)/);
+  if (!pm) return { error: "bad shape", status: 502 };
+  const x = parseFloat(pm[1]);
+  const y = parseFloat(pm[2]);
+
+  const epRes = await fetch(
+    "https://www.govmap.gov.il/api/layers-catalog/entitiesByPoint",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        point: [x, y],
+        layers: [{ layerId: "parcel_all" }],
+        tolerance: 50,
+        language: "he",
+      }),
+    }
+  );
+  if (!epRes.ok) return { error: "entitiesByPoint failed", status: 502 };
+  const ep = await epRes.json();
+  const entities = ep?.data?.[0]?.entities || [];
+  if (entities.length === 0) {
+    return { error: "no parcel at point", point: [x, y], label: top.text, status: 404 };
+  }
+
+  // Closest centroid first.
+  entities.sort((a, b) => {
+    const da = Math.hypot(a.centroid[0] - x, a.centroid[1] - y);
+    const db = Math.hypot(b.centroid[0] - x, b.centroid[1] - y);
+    return da - db;
+  });
+  const best = entities[0];
+  const getField = (name) =>
+    best.fields?.find((f) => f.fieldName === name)?.fieldValue;
+  const gush = getField("מספר גוש");
+  const helka = getField("חלקה");
+  if (gush == null || helka == null) {
+    return { error: "missing fields", status: 502 };
+  }
+  return {
+    gush: String(gush),
+    helka: String(helka),
+    from: "entitiesByPoint",
+    label: top.text,
+  };
+}
+
 export default {
   async fetch(request) {
     if (request.method === "OPTIONS") {
@@ -129,6 +214,12 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    // Address -> gush/helka resolution.
+    if (url.pathname === "/resolve") {
+      const out = await resolveToParcel(url.searchParams.get("q"));
+      return jsonResponse(out, { status: out.status || 200 });
+    }
 
     // Aggregated endpoint: one round-trip for the full planning lookup.
     if (url.pathname === "/all") {

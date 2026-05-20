@@ -85,18 +85,34 @@ const TYPE_RANK = { parcel: 0, address: 1, street: 2, settlement: 3, neighborhoo
  * @param {AbortSignal} [signal]
  * @returns {Promise<Array<{id, type, text, displayText, isJerusalem, point, gushHelka, raw}>>}
  */
+// Production resolver lives on the Cloudflare Worker (chains GovMap autocomplete
+// + entitiesByPoint to map any address text to a real gush/helka). In dev we
+// just regex-match the literal "גוש X חלקה Y" form and skip the chain.
+const RESOLVE_URL =
+  (import.meta.env.VITE_JERGIS_URL ||
+    "https://urbanplan-jergis.shalomkf.workers.dev") + "/resolve";
+
 /**
- * Resolve free-form text to query params Jerusalem GIS understands.
- * Tries, in order:
- *   1. Regex "גוש X חלקה Y" -> { gush, helka }
- *   2. GovMap autocomplete: first parcel result -> { gush, helka }
- *   3. GovMap autocomplete: first address/point result -> { x, y } in ITM (EPSG:2039)
- * Returns null if nothing matches at all.
+ * Resolve free-form text to {gush, helka}. Returns null if nothing matches.
  */
 export async function resolveTextToGushHelka(text) {
   const direct = extractGushHelkaFromText(text);
   if (direct) return direct;
 
+  if (!import.meta.env.DEV) {
+    try {
+      const url = `${RESOLVE_URL}?q=${encodeURIComponent(text)}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const out = await res.json();
+        if (out?.gush && out?.helka) {
+          return { gush: String(out.gush), helka: String(out.helka), _label: out.label };
+        }
+      }
+    } catch { /* fall through */ }
+  }
+
+  // Dev / Worker error fallback: best-effort on the client.
   const results = await geocodeAutocomplete(text).catch(() => []);
   const firstParcel = results.find((r) => r.gushHelka);
   if (firstParcel) return firstParcel.gushHelka;
