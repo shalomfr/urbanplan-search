@@ -1,11 +1,15 @@
 // Jerusalem Municipality GIS client.
 // Documentation: src/api/jerusalemGis.api.md
 
-// Always go through the host's /jergis path. In dev Vite proxies it; in
-// production the deploy target (e.g. Render) must rewrite /jergis/* ->
-// https://jergisinfohub.jerusalem.muni.il/Services/api/:splat. Direct calls
-// to jergisinfohub.jerusalem.muni.il fail CORS in the browser.
-const JERGIS_BASE = '/jergis';
+// In dev, /jergis is proxied by Vite (with TLS bypass).
+// In production we hit a Cloudflare Worker that adds CORS headers and
+// emulates Chrome to bypass Akamai's data-center-IP block. Direct calls
+// to jergisinfohub.jerusalem.muni.il fail browser CORS and Akamai blocks
+// data-center IPs (Render, etc) at the network layer.
+const JERGIS_BASE = import.meta.env.DEV
+  ? '/jergis'
+  : (import.meta.env.VITE_JERGIS_URL ||
+    'https://urbanplan-jergis.shalomkf.workers.dev');
 
 const JERGIS_UI_BASE = 'https://jergisinfohub.jerusalem.muni.il/UI/GisMeidaT/index.html';
 const YKPUB_BASE = 'https://ykpubdata.jerusalem.muni.il/#/Rishui';
