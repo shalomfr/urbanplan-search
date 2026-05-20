@@ -78,7 +78,7 @@ export default function AddressAutocomplete({ value, onChange, onSelect, placeho
   };
 
   const handlePick = (suggestion) => {
-    onChange(suggestion.text);
+    onChange(suggestion.displayText || suggestion.text);
     setIsOpen(false);
     onSelect(suggestion);
   };
@@ -115,14 +115,25 @@ export default function AddressAutocomplete({ value, onChange, onSelect, placeho
               >
                 <Icon className="w-4 h-4 mt-0.5 text-primary flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground truncate">{s.text}</div>
-                  {s.originalText && s.originalText !== s.text && (
-                    <div className="text-xs text-muted-foreground truncate">{s.originalText}</div>
+                  <div className="text-sm font-medium text-foreground truncate">
+                    {s.displayText || s.text}
+                  </div>
+                  {s.gushHelka && (
+                    <div className="text-xs text-emerald-600">
+                      גוש {s.gushHelka.gush} · חלקה {s.gushHelka.helka} · יישלח ישירות לעיריית ירושלים
+                    </div>
                   )}
                 </div>
-                <Badge variant="outline" className={`text-xs flex-shrink-0 ${meta.color}`}>
-                  {meta.label}
-                </Badge>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <Badge variant="outline" className={`text-xs ${meta.color}`}>
+                    {meta.label}
+                  </Badge>
+                  {s.isJerusalem && (
+                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
+                      ירושלים
+                    </Badge>
+                  )}
+                </div>
               </button>
             );
           })}
