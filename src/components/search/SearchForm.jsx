@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Search, MapPin, Hash, FileText, Loader2, Zap } from "lucide-react";
+import AddressAutocomplete from "./AddressAutocomplete";
 
 const SEARCH_TYPES = [
   { value: "free_text", label: "חיפוש חופשי", icon: Search, placeholder: "חפש לפי כתובת, גוש, חלקה, מספר תוכנית או כל דבר אחר..." },
@@ -19,14 +20,27 @@ export default function SearchForm({ onSearch, isSearching }) {
   const [gush, setGush] = useState("");
   const [helka, setHelka] = useState("");
   const [address, setAddress] = useState("");
+  const [addressPick, setAddressPick] = useState(null); // GovMap suggestion
   const [planNumber, setPlanNumber] = useState("");
   const [useJerusalemDirect, setUseJerusalemDirect] = useState(true);
+
+  const handleAddressSelect = (suggestion) => {
+    setAddressPick(suggestion);
+    if (suggestion?.gushHelka) {
+      onSearch({ gush: suggestion.gushHelka.gush, helka: suggestion.gushHelka.helka }, "jerusalem_direct");
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
     if (searchType === "gush_helka" && useJerusalemDirect && gush.trim() && helka.trim()) {
       onSearch({ gush: gush.trim(), helka: helka.trim() }, "jerusalem_direct");
+      return;
+    }
+
+    if (searchType === "address" && addressPick?.gushHelka) {
+      onSearch({ gush: addressPick.gushHelka.gush, helka: addressPick.gushHelka.helka }, "jerusalem_direct");
       return;
     }
 
@@ -127,13 +141,28 @@ export default function SearchForm({ onSearch, isSearching }) {
           )}
 
           {searchType === "address" && (
-            <Input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder={currentType.placeholder}
-              className="h-14 text-base px-5 rounded-xl"
-              autoFocus
-            />
+            <>
+              <AddressAutocomplete
+                value={address}
+                onChange={(v) => { setAddress(v); setAddressPick(null); }}
+                onSelect={handleAddressSelect}
+                placeholder="הקלד כתובת או 'גוש X חלקה Y' — קבל הצעות מ-GovMap"
+                autoFocus
+              />
+              {addressPick && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {addressPick.gushHelka ? (
+                    <span className="text-emerald-600">
+                      ✓ גוש {addressPick.gushHelka.gush} חלקה {addressPick.gushHelka.helka} — נשלח אוטומטית למערכת ירושלים
+                    </span>
+                  ) : (
+                    <span>
+                      נבחרה כתובת. לחץ "חפש" להמשך חיפוש חופשי (גוש/חלקה לא נמצאו ישירות — מומלץ לבחור תוצאה מסוג "גוש/חלקה" מהרשימה)
+                    </span>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           {searchType === "plan_number" && (
