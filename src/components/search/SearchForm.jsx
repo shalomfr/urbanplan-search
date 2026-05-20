@@ -7,15 +7,21 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Search, MapPin, Hash, FileText, Loader2, Zap } from "lucide-react";
 import AddressAutocomplete from "./AddressAutocomplete";
 
-const SEARCH_TYPES = [
-  { value: "free_text", label: "חיפוש חופשי", icon: Search, placeholder: "חפש לפי כתובת, גוש, חלקה, מספר תוכנית או כל דבר אחר..." },
+const BASE44_ENABLED = !!import.meta.env.VITE_BASE44_APP_ID;
+
+const ALL_SEARCH_TYPES = [
+  { value: "free_text", label: "חיפוש חופשי", icon: Search, placeholder: "חפש לפי כתובת, גוש, חלקה, מספר תוכנית או כל דבר אחר...", requiresLlm: true },
   { value: "gush_helka", label: "גוש / חלקה", icon: Hash, placeholder: "" },
   { value: "address", label: "כתובת", icon: MapPin, placeholder: "לדוגמה: רחוב הרצל 5, תל אביב" },
-  { value: "plan_number", label: "מספר תוכנית", icon: FileText, placeholder: "לדוגמה: תא/3000" },
+  { value: "plan_number", label: "מספר תוכנית", icon: FileText, placeholder: "לדוגמה: תא/3000", requiresLlm: true },
 ];
 
+const SEARCH_TYPES = BASE44_ENABLED
+  ? ALL_SEARCH_TYPES
+  : ALL_SEARCH_TYPES.filter((t) => !t.requiresLlm);
+
 export default function SearchForm({ onSearch, isSearching }) {
-  const [searchType, setSearchType] = useState("free_text");
+  const [searchType, setSearchType] = useState(SEARCH_TYPES[0].value);
   const [freeText, setFreeText] = useState("");
   const [gush, setGush] = useState("");
   const [helka, setHelka] = useState("");
@@ -76,7 +82,7 @@ export default function SearchForm({ onSearch, isSearching }) {
     >
       <div className="bg-card rounded-2xl shadow-xl border p-6 md:p-8">
         <Tabs value={searchType} onValueChange={setSearchType} className="mb-6">
-          <TabsList className="w-full grid grid-cols-4 h-auto p-1">
+          <TabsList className={`w-full grid h-auto p-1 ${SEARCH_TYPES.length === 4 ? 'grid-cols-4' : 'grid-cols-2'}`}>
             {SEARCH_TYPES.map(type => (
               <TabsTrigger
                 key={type.value}

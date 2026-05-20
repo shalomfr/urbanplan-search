@@ -140,8 +140,9 @@ export default function Search() {
 
     if (!BASE44_ENABLED) {
       toast({
-        title: "חיפוש חופשי לא זמין",
-        description: "במצב עצמאי זמין רק חיפוש לפי גוש/חלקה/כתובת בירושלים.",
+        title: "לא נמצא גוש/חלקה לשאילתה",
+        description:
+          "בחר תוצאת 'גוש/חלקה' מהאוטוקומפליט, או הקלד 'גוש X חלקה Y' ישירות.",
         variant: "destructive",
       });
       setResults([]);
