@@ -12,8 +12,8 @@ const BROWSER_UA =
 
 const JERGIS_TARGET = "https://jergisinfohub.jerusalem.muni.il/Services/api";
 const BASE44_TARGET =
-  process.env.BASE44_PROXY_TARGET ||
-  "https://preview-sandbox--6a0d20f18fd94e616eb3512d.base44.app";
+  (process.env.BASE44_PROXY_TARGET ||
+    "https://preview-sandbox--6a0d20f18fd94e616eb3512d.base44.app") + "/api";
 
 function stripProxyMarkers(proxyReq) {
   proxyReq.removeHeader("x-forwarded-for");
