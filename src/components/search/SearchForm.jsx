@@ -3,7 +3,8 @@ import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, MapPin, Hash, FileText, Loader2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Search, MapPin, Hash, FileText, Loader2, Zap } from "lucide-react";
 
 const SEARCH_TYPES = [
   { value: "free_text", label: "חיפוש חופשי", icon: Search, placeholder: "חפש לפי כתובת, גוש, חלקה, מספר תוכנית או כל דבר אחר..." },
@@ -19,9 +20,16 @@ export default function SearchForm({ onSearch, isSearching }) {
   const [helka, setHelka] = useState("");
   const [address, setAddress] = useState("");
   const [planNumber, setPlanNumber] = useState("");
+  const [useJerusalemDirect, setUseJerusalemDirect] = useState(true);
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    if (searchType === "gush_helka" && useJerusalemDirect && gush.trim() && helka.trim()) {
+      onSearch({ gush: gush.trim(), helka: helka.trim() }, "jerusalem_direct");
+      return;
+    }
+
     let query = "";
     switch (searchType) {
       case "free_text":
@@ -80,27 +88,42 @@ export default function SearchForm({ onSearch, isSearching }) {
           )}
 
           {searchType === "gush_helka" && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">גוש</label>
-                <Input
-                  value={gush}
-                  onChange={(e) => setGush(e.target.value)}
-                  placeholder="מספר גוש"
-                  className="h-14 text-base px-5 rounded-xl"
-                  autoFocus
-                />
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-1.5 block">גוש</label>
+                  <Input
+                    value={gush}
+                    onChange={(e) => setGush(e.target.value)}
+                    placeholder="מספר גוש"
+                    className="h-14 text-base px-5 rounded-xl"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-1.5 block">
+                    חלקה {useJerusalemDirect && <span className="text-primary">*</span>}
+                  </label>
+                  <Input
+                    value={helka}
+                    onChange={(e) => setHelka(e.target.value)}
+                    placeholder={useJerusalemDirect ? "חובה במצב ירושלים ישיר" : "מספר חלקה (אופציונלי)"}
+                    className="h-14 text-base px-5 rounded-xl"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">חלקה</label>
-                <Input
-                  value={helka}
-                  onChange={(e) => setHelka(e.target.value)}
-                  placeholder="מספר חלקה (אופציונלי)"
-                  className="h-14 text-base px-5 rounded-xl"
+              <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                <Checkbox
+                  checked={useJerusalemDirect}
+                  onCheckedChange={setUseJerusalemDirect}
                 />
-              </div>
-            </div>
+                <Zap className="w-4 h-4 text-amber-500" />
+                <span className="text-sm">
+                  שליפה ישירה ממערכת ה-GIS של עיריית ירושלים
+                  <span className="text-muted-foreground mr-1">(מהיר ומדויק, רק לגוש בתחום ירושלים)</span>
+                </span>
+              </label>
+            </>
           )}
 
           {searchType === "address" && (

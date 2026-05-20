@@ -16,5 +16,15 @@ export default defineConfig({
       visualEditAgent: true
     }),
     react(),
-  ]
+  ],
+  server: {
+    proxy: {
+      '/jergis': {
+        target: 'https://jergisinfohub.jerusalem.muni.il',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/jergis/, '/Services/api'),
+      },
+    },
+  },
 });

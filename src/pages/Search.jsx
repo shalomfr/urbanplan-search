@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { fetchAllPlanningInfo } from "@/api/jerusalemGis";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
 import SearchHero from "../components/search/SearchHero";
 import SearchForm from "../components/search/SearchForm";
 import SearchResults from "../components/search/SearchResults";
+import JerusalemGisResults from "../components/search/JerusalemGisResults";
 import RecentSearches from "../components/search/RecentSearches";
 
 export default function Search() {
   const [results, setResults] = useState(null);
+  const [gisResults, setGisResults] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
@@ -28,8 +31,36 @@ export default function Search() {
 
   const handleSearch = async (query, searchType) => {
     setIsSearching(true);
-    setSearchQuery(query);
     setResults(null);
+    setGisResults(null);
+
+    // Direct Jerusalem GIS path — query is { gush, helka }
+    if (searchType === "jerusalem_direct") {
+      const label = `ירושלים: גוש ${query.gush} / חלקה ${query.helka}`;
+      setSearchQuery(label);
+      try {
+        const data = await fetchAllPlanningInfo(query);
+        setGisResults({ data, query });
+        await base44.entities.SearchHistory.create({
+          query: label,
+          search_type: "jerusalem_direct",
+          results_count: data.categories.reduce((s, c) => s + (c.records?.length || 0), 0),
+        });
+        queryClient.invalidateQueries({ queryKey: ["searchHistory"] });
+      } catch (err) {
+        toast({
+          title: "שגיאה בשליפה ממערכת ירושלים",
+          description: err.message || "נסה שוב",
+          variant: "destructive",
+        });
+        setGisResults({ data: null, query });
+      } finally {
+        setIsSearching(false);
+      }
+      return;
+    }
+
+    setSearchQuery(query);
 
     const prompt = `אתה מומחה לתכנון ובנייה בישראל. המשתמש מחפש תוכניות בניין עיר (תב"ע) לפי השאילתה: "${query}"
 
@@ -136,7 +167,7 @@ export default function Search() {
       <SearchHero />
       <SearchForm onSearch={handleSearch} isSearching={isSearching} />
 
-      {!results && !isSearching && (
+      {!results && !gisResults && !isSearching && (
         <RecentSearches
           searches={searchHistory}
           onSelect={handleSelectSearch}
@@ -144,13 +175,17 @@ export default function Search() {
         />
       )}
 
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <SearchResults
-          results={results}
-          savedPlanIds={savedPlanIds}
-          onSave={handleSavePlan}
-          searchQuery={searchQuery}
-        />
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        {gisResults ? (
+          <JerusalemGisResults data={gisResults.data} query={gisResults.query} />
+        ) : (
+          <SearchResults
+            results={results}
+            savedPlanIds={savedPlanIds}
+            onSave={handleSavePlan}
+            searchQuery={searchQuery}
+          />
+        )}
       </div>
     </div>
   );
